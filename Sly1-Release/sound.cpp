@@ -3953,20 +3953,85 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 	SetDoppler(amb);
 }
 
+// Picks the oldest looping sound that nothing can ever stop: no owner handle,
+// not an intermittent/recurring sound, and not the streamed ambient. Sounds
+// that are currently out of range are preferred, since reclaiming them is
+// inaudible.
+static AMB* PambFindOrphanedLoop()
+{
+	AMB* pambBest = nullptr;
+
+	for (const std::unique_ptr<AMB>& slot : g_psw->ambOwners)
+	{
+		if (!slot)
+			continue;
+
+		AMB* pamb = slot.get();
+
+		if (!pamb->fContinuous || pamb->ppamb != nullptr || pamb->fStopped)
+			continue;
+
+		if (pamb->lmRepeat.gMin >= 0.0f)
+			continue;
+
+		if (pamb == s_pambVagAmbient || static_cast<int>(pamb->sfxid) == -2)
+			continue;
+
+		if (pambBest == nullptr)
+		{
+			pambBest = pamb;
+			continue;
+		}
+
+		const bool fBestOut = pambBest->fOutOfRange != 0;
+		const bool fOut = pamb->fOutOfRange != 0;
+
+		if (fOut != fBestOut)
+		{
+			if (fOut)
+				pambBest = pamb;
+
+			continue;
+		}
+
+		if (pamb->iSerial < pambBest->iSerial)
+			pambBest = pamb;
+	}
+
+	return pambBest;
+}
+
 AMB* PambAlloc()
 {
 	if (g_psw == nullptr)
 		return nullptr;
 
-	for (std::unique_ptr<AMB>& slot : g_psw->ambOwners)
+	for (int pass = 0; pass < 2; ++pass)
 	{
-		if (slot)
-			continue;
+		for (std::unique_ptr<AMB>& slot : g_psw->ambOwners)
+		{
+			if (slot)
+				continue;
 
-		slot = std::make_unique<AMB>();
-		AMB* pamb = slot.get();
-		AppendDlEntry(&g_psw->dlAmb, pamb);
-		return pamb;
+			slot = std::make_unique<AMB>();
+			AMB* pamb = slot.get();
+			AppendDlEntry(&g_psw->dlAmb, pamb);
+			return pamb;
+		}
+
+		// Every sound slot is in use. Without this, any leaked loops that
+		// pile up eventually fill the pool, and from then on every new sound
+		// effect (Sly's cane, pickups, etc.) silently fails to play until the
+		// level reloads. Reclaim one leaked loop so the new sound can play.
+		if (pass == 0)
+		{
+			AMB* pambOrphan = PambFindOrphanedLoop();
+
+			if (pambOrphan == nullptr)
+				break;
+
+			RemoveAmb(pambOrphan);
+		}
 	}
 
 	return nullptr;
