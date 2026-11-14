@@ -935,8 +935,14 @@ void RetractAsega(ASEGA* pasega)
         pactseg = pactsegNext;
     }
 
+    // Dropping the handle here used to orphan the animation's looping sound.
+    // When that sound is attached to an object that stays in the world (such
+    // as the turret Sly fires from, or an enemy's walk cycle), nothing can
+    // ever stop it again, so every replay of the animation stacked another
+    // endless loop. Stop it instead, with a short fade so the cut does not
+    // pop. StopSound also clears pambContinuous.
     if (pasega->pambContinuous != nullptr)
-        DropPamb(&pasega->pambContinuous);
+        StopSound(pasega->pambContinuous, 50);
 
     void* apvArgs[1] = { &pasega->paloRoot };
     HandleLoSpliceEvent(static_cast<LO*>(paseg), 11, 1, apvArgs);
