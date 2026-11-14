@@ -42,6 +42,8 @@
 #include "../platform/audio_linux.h"
 #endif
 #include <filesystem>
+#include <unordered_map>
+#include <sstream>
 #include <fstream>
 #include <vector>
 #include <cstring>
@@ -3247,6 +3249,100 @@ static bool ReserveEffectHardwareVoice(int incomingPriority)
 	return true;
 }
 
+// ---------------------------------------------------------------------------
+// Temporary sound diagnostics (sound_tone_trace.log)
+//
+// Logs each distinct sound effect tone once, the first time it plays, with
+// the object playing it and the details that decide how it sounds (sample
+// length, loop, noise flag, pitch). Every 50th repeat is logged again so
+// sounds that fire constantly stand out. Capped at 2 MB.
+// ---------------------------------------------------------------------------
+static std::ofstream s_toneTrace;
+static bool s_toneTraceTried = false;
+static std::size_t s_toneTraceBytes = 0;
+static constexpr std::size_t kToneTraceLimit = 2u * 1024u * 1024u;
+
+static void TraceEffectTone(const AMB& amb, const EFFECTBANK& bank,
+	const EFFECTBANK::SOUND& sound, const EFFECTBANK::TONE& tone,
+	const DecodedEffectSample& decoded, float pitchMod)
+{
+	if (!s_toneTraceTried)
+	{
+		s_toneTraceTried = true;
+		const std::filesystem::path path = ExecutableDirectory() / "sound_tone_trace.log";
+		s_toneTrace.open(path, std::ios::trunc);
+	}
+
+	if (!s_toneTrace.is_open() || s_toneTraceBytes >= kToneTraceLimit)
+		return;
+
+	static std::unordered_map<uint64_t, uint32_t> s_mpkeyCount;
+
+	const uint64_t key =
+		(static_cast<uint64_t>(bank.bankId & 0xFFFFu) << 48) |
+		(static_cast<uint64_t>(static_cast<uint16_t>(amb.soundIndex)) << 32) |
+		static_cast<uint64_t>(tone.sampleOffset);
+
+	const uint32_t count = ++s_mpkeyCount[key];
+
+	if (count != 1 && count % 50 != 0)
+		return;
+
+	std::ostringstream line;
+	line << "t=" << g_clock.t
+		<< " n=" << count
+		<< " sfx=" << static_cast<int>(amb.sfxid)
+		<< " bank=" << bank.bankId
+		<< " snd=" << amb.soundIndex
+		<< " cont=" << static_cast<int>(amb.fContinuous)
+		<< " flags=0x" << std::hex << tone.flags << std::dec
+		<< " noise=" << ((tone.flags & 8) != 0 ? 1 : 0)
+		<< " note=" << static_cast<int>(tone.centerNote)
+		<< " fine=" << static_cast<int>(tone.centerFine)
+		<< " pbLo=" << static_cast<int>(tone.pitchBendLow)
+		<< " pbHi=" << static_cast<int>(tone.pitchBendHigh)
+		<< " adsr=" << std::hex << tone.adsr1 << '/' << tone.adsr2 << std::dec
+		<< " samples=" << decoded.pcm.size()
+		<< " loop=" << (decoded.loop ? 1 : 0)
+		<< " loopBegin=" << decoded.loopBegin
+		<< " loopLen=" << decoded.loopLength
+		<< " frq=" << pitchMod
+		<< " grains=";
+
+	for (std::size_t igrain = 0; igrain < sound.grains.size(); ++igrain)
+	{
+		if (igrain != 0)
+			line << ',';
+
+		line << sound.grains[igrain].type;
+	}
+
+	line << " owner=";
+
+	if (amb.palo == nullptr)
+	{
+		line << "none";
+	}
+	else
+	{
+		const LO* plo = reinterpret_cast<const LO*>(amb.palo);
+		line << "oid:" << plo->oid;
+
+		if (plo->pvtlo != nullptr)
+			line << ",cid:" << static_cast<int>(plo->pvtlo->cid);
+
+		if (plo->pchzName != nullptr)
+			line << ",name:" << plo->pchzName;
+	}
+
+	line << '\n';
+
+	const std::string text = line.str();
+	s_toneTrace << text;
+	s_toneTrace.flush();
+	s_toneTraceBytes += text.size();
+}
+
 bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& sound,
 	const EFFECTBANK::TONE& tone, float applicationVolume, float pitchMod)
 {
@@ -3303,6 +3399,8 @@ bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& s
 	{
 		return false;
 	}
+	TraceEffectTone(amb, bank, sound, tone, decoded, pitchMod);
+
 	EFFECTVOICE active;
 	active.pcm = std::move(decoded.pcm);
 	active.loop = decoded.loop;
