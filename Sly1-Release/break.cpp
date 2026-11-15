@@ -432,6 +432,14 @@ void BreakBrk(BRK* pbrk)
 
 	bool fBreakStartup = FGetChkmgrIchk(&g_chkmgr, pbrk->ichkBroken) == 0;
 
+	g_tAudioDiagUntil = g_clock.t + 1.0f;
+	AudioDiag("breakable smash oid=%d breakSfx=%d explosion=%d explosionOid=%d skipEffects=%d startup=%d",
+		static_cast<int>(pbrk->oid),
+		pbrk->psfxBreak ? static_cast<int>(pbrk->psfxBreak.get()->sfxid) : -1,
+		pbrk->pexplBreak ? 1 : 0,
+		pbrk->pexplBreak ? static_cast<int>(reinterpret_cast<LO*>(pbrk->pexplBreak)->oid) : -1,
+		pbrk->fSkipBreakEffects ? 1 : 0, fBreakStartup ? 1 : 0);
+
 	if (!pbrk->fSkipBreakEffects) 
 	{
 		for (int ibrp = 0; ibrp < pbrk->cbrp; ++ibrp) {
@@ -552,18 +560,19 @@ void BreakBrk(BRK* pbrk)
 			ConvertAloPos(pbrk, nullptr, &pbrk->dposCoin, &posCoin);
 			OnDifficultyBreak(&g_difficulty, &posCoin, pbrk->ccoin, pbrk->fSuppressDifficultyUpdate);
 
+			// Breakable smash sounds are fire-and-forget: no handle, no owner.
+			// A looping sound started that way could never be stopped, so it is
+			// skipped. Mz. Ruby's candles name a looping sound (SFXID 529) here,
+			// and PS2 footage has no sound from it when a candle breaks.
 			if (pbrk->psfxBreak == nullptr) {
-				AudioDiag("breakable smash oid=%d sfx=42", static_cast<int>(pbrk->oid));
-				StartSoundOnce((SFXID)42, nullptr, &pbrk->xf.posWorld, 3000.0f, 300.0f, 1.0f, 0.0f, 0.0f);
+				if (!FContinuousSound((SFXID)42))
+					StartSound((SFXID)42, nullptr, nullptr, &pbrk->xf.posWorld, 3000.0f, 300.0f, 1.0f, 0.0f, 0.0f, nullptr, nullptr);
 			}
 			else {
 				SFX* psfx = pbrk->psfxBreak.get();
-				AudioDiag("breakable smash oid=%d sfx=%d", static_cast<int>(pbrk->oid),
-					static_cast<int>(psfx->sfxid));
-				// Breakable smash sounds are fire-and-forget. A few (such as Mz. Ruby's
-				// candles) use a looping recording, which nothing could ever stop, so
-				// play them through once.
-				StartSoundOnce(psfx->sfxid, nullptr, &pbrk->xf.posWorld, psfx->sStart, psfx->sFull, psfx->uVol, 0.0f, 0.0f);
+
+				if (!FContinuousSound(psfx->sfxid))
+					StartSound(psfx->sfxid, nullptr, nullptr, &pbrk->xf.posWorld, psfx->sStart, psfx->sFull, psfx->uVol, 0.0f, 0.0f, nullptr, nullptr);
 			}
 		}
 

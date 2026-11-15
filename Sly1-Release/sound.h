@@ -92,7 +92,6 @@ struct AMB
     float sStart;
     float sFull;
     int fContinuous;
-    int fPlayOnce;          // loops in the sample play through once, then stop
     int fOutOfRange;
     int fAttached;
     int fStopped;
@@ -369,10 +368,6 @@ struct DecodedEffectSample
     std::vector<int16_t> pcm;
     uint32_t loopBegin = 0;
     uint32_t loopLength = 0;
-    // Length of the sample as recorded: the intro plus one pass of the loop.
-    // The decoder can append extra loop passes for seamless looping, so a
-    // play-once sound cuts the buffer back to this length.
-    uint32_t onePassLength = 0;
     bool loop = false;
 };
 
@@ -487,14 +482,6 @@ bool FHasAmbientVag();
 int HsNextFootFall();
 void NextSneakyFootstep();
 
-// TEMPORARY DIAGNOSTIC: appends a timestamped line to audio_diag.log.
-void AudioDiag(const char* format, ...);
-
-// Same as StartSound, but a looping sound plays through once instead of
-// looping forever. For sounds started with no handle and no owner object,
-// which nothing could ever stop (such as a breakable's smash sound).
-void StartSoundOnce(SFXID sfxid, ALO* palo, glm::vec3* ppos, float sStart, float sFull,
-	float uVolAtSource, float frq, float uDoppler);
 void HandleWipeVolumes(int fMusicWipes, float u);
 void ResetCommentaryAudio();
 void SetAttractVolume(bool fMuted);
@@ -545,6 +532,10 @@ void KillSoundSystem();
 SoundBankPtr SbpEnsureBank(int ibnk, const char* fileName = nullptr);
 void UnloadEffectBank();
 bool FContinuousSound(SFXID sfxid);
+// TEMPORARY DIAGNOSTIC (audio_diag.log). StartSound logs every start while
+// g_clock.t <= g_tAudioDiagUntil; breakables open a one-second window.
+void AudioDiag(const char* format, ...);
+extern float g_tAudioDiagUntil;
 void SetSwDefaultReverb(SW* psw, REVERBK rvrbk, int depth);
 
 void StartupSound();

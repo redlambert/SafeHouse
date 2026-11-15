@@ -2974,7 +2974,6 @@ bool DecodeEffectAdpcm(const EFFECTBANK& bank, uint32_t sampleOffset,
 	// predictor state repeats. Replacing the first pass with the final pass made
 	// the intro jump directly to a different predictor state; some ambient loops
 	// produced a nearly full-scale discontinuity during world startup.
-	decoded.onePassLength = static_cast<uint32_t>(decoded.pcm.size());
 	if (decoded.loop && loopBlockStart < loopBlockEnd)
 	{
 		const std::size_t originalPcmSize = decoded.pcm.size();
@@ -3249,13 +3248,12 @@ static bool ReserveEffectHardwareVoice(int incomingPriority)
 	return true;
 }
 
-// Set only while StartSoundOnce is starting its sound.
-static bool s_fStartSoundOnce = false;
-
 // TEMPORARY DIAGNOSTIC (audio_diag.log). Remove after testing.
+float g_tAudioDiagUntil = -1.0f;
+
 void AudioDiag(const char* format, ...)
 {
-	constexpr int kLineLimit = 60000;
+	constexpr int kLineLimit = 20000;
 	static int s_cLines = 0;
 	static std::ofstream s_log;
 
@@ -3270,7 +3268,7 @@ void AudioDiag(const char* format, ...)
 			return;
 	}
 
-	char line[768];
+	char line[512];
 	va_list args;
 	va_start(args, format);
 	std::vsnprintf(line, sizeof(line), format, args);
@@ -3278,43 +3276,7 @@ void AudioDiag(const char* format, ...)
 
 	s_log << "t=" << g_clock.t << ' ' << line << '\n';
 	++s_cLines;
-
-	if (s_cLines == kLineLimit)
-		s_log << "line limit reached\n";
-
 	s_log.flush();
-}
-
-// Sly's footfalls (71-74), the sneaky tiptoe (119), and anything started
-// through StartSoundOnce (breakables) get every start logged.
-static bool FAudioDiagTracked(int sfxid)
-{
-	return sfxid == 119 || (sfxid >= 71 && sfxid <= 74) || s_fStartSoundOnce;
-}
-
-// Logs a sound's grain list the first time that SFXID is started.
-static void AudioDiagDumpSound(int sfxid, int ibnk, int isnd, const EFFECTBANK::SOUND& sound)
-{
-	static std::array<bool, kSfxCount> s_mpsfxidDumped{};
-
-	if (sfxid < 0 || sfxid >= static_cast<int>(kSfxCount) || s_mpsfxidDumped[sfxid])
-		return;
-
-	s_mpsfxidDumped[sfxid] = true;
-
-	std::string grains;
-
-	for (const EFFECTBANK::GRAIN& grain : sound.grains)
-	{
-		char item[48];
-		std::snprintf(item, sizeof(item), " %u/%d%s", grain.type, grain.delay,
-			grain.hasTone ? "T" : "");
-		grains += item;
-	}
-
-	AudioDiag("dump sfx=%d bnk=%d isnd=%d flags=0x%x looper=%d limit=%d grains(type/delay):%s",
-		sfxid, ibnk, isnd, static_cast<unsigned>(sound.flags), sound.IsLooper() ? 1 : 0,
-		static_cast<int>(sound.instanceLimit), grains.c_str());
 }
 
 bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& sound,
@@ -3325,9 +3287,6 @@ bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& s
 	const int hardwarePriority = static_cast<uint8_t>(tone.priority);
 	if (!ReserveEffectHardwareVoice(hardwarePriority))
 	{
-		if (FAudioDiagTracked(static_cast<int>(amb.sfxid)) || amb.fPlayOnce)
-			AudioDiag("tone dropped: no hardware voice sfx=%d priority=%d",
-				static_cast<int>(amb.sfxid), hardwarePriority);
 		return false;
 	}
 
@@ -3376,15 +3335,6 @@ bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& s
 	{
 		return false;
 	}
-	if (amb.fPlayOnce)
-	{
-		// Play the sample as recorded (intro plus one loop pass), not the extra
-		// loop passes the decoder added for seamless looping.
-		if (decoded.loop && decoded.onePassLength > 0 && decoded.onePassLength < decoded.pcm.size())
-			decoded.pcm.resize(decoded.onePassLength);
-		decoded.loop = false;
-	}
-
 	EFFECTVOICE active;
 	active.pcm = std::move(decoded.pcm);
 	active.loop = decoded.loop;
@@ -3802,14 +3752,6 @@ void ExecuteEffectGrain(AMB& amb)
 		break;
 	}
 	case 22: // LOOP_END
-		// A play-once sound runs its grain loop a single time instead of
-		// jumping back to LOOP_START forever.
-		if (amb.fPlayOnce)
-		{
-			AudioDiag("play-once sfx=%d reached grain LOOP_END, not looping",
-				static_cast<int>(amb.sfxid));
-			break;
-		}
 		for (int i = amb.nextGrain - 1; i >= 0; --i)
 			if (sound.grains[i].type == 21) { amb.nextGrain = i - 1; break; }
 		break;
@@ -3912,31 +3854,25 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 		return;
 	}
 	const SND& mapping = g_mpsfxidsndbnk[index];
-	const bool fDiag = FAudioDiagTracked(index);
+	const bool fDiag = g_clock.t <= g_tAudioDiagUntil;
 	if (fDiag)
-		AudioDiag("start sfx=%d once=%d handle=%d owner=%d pos=%d vol=%.2f frq=%.3f sStart=%.0f",
-			index, s_fStartSoundOnce ? 1 : 0, ppamb ? 1 : 0, palo ? 1 : 0, ppos ? 1 : 0,
-			uVolAtSource, frq, sStart);
+		AudioDiag("  sound start sfx=%d handle=%d owner=%d pos=%d vol=%.2f frq=%.3f sStart=%.0f looping=%d",
+			index, ppamb ? 1 : 0, palo ? static_cast<int>(reinterpret_cast<LO*>(palo)->oid) : -1,
+			ppos ? 1 : 0, uVolAtSource, frq, sStart, FContinuousSound(sfxid) ? 1 : 0);
 	if (mapping.ibnk > 0 && mapping.ibnk != g_psw->ibnk)
 	{
 		if (fDiag)
-			AudioDiag("  dropped: sfx bank %d but world bank %d", mapping.ibnk, g_psw->ibnk);
+			AudioDiag("    dropped: sound is in bank %d, world bank is %d", mapping.ibnk, g_psw->ibnk);
 		return;
 	}
 	EFFECTBANK* bank = static_cast<EFFECTBANK*>(SbpEnsureBank(mapping.ibnk));
 	if (!bank || mapping.isnd < 0 || mapping.isnd >= static_cast<int>(bank->sounds.size()))
 	{
-		if (fDiag)
-			AudioDiag("  dropped: bank %d not loaded or isnd %d out of range",
-				mapping.ibnk, mapping.isnd);
 		return;
 	}
 	EFFECTBANK::SOUND& sound = bank->sounds[mapping.isnd];
-	AudioDiagDumpSound(index, mapping.ibnk, mapping.isnd, sound);
 	if (sound.grains.empty())
 	{
-		if (fDiag)
-			AudioDiag("  dropped: no grains");
 		return;
 	}
 	// A caller-provided handle is exclusive ownership of one logical sound.
@@ -3971,14 +3907,12 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 			}
 			if (!weakest || ((sound.flags & 0x10u) != 0 && weakest->uVolAtSource >= uVolAtSource))
 			{
-				if (fDiag)
-					AudioDiag("  dropped: instance limit %d reached", static_cast<int>(sound.instanceLimit));
 				return;
 			}
 			StopSound(weakest, 0);
 		}
 	}
-	const bool continuous = FContinuousSound(sfxid) && !s_fStartSoundOnce;
+	const bool continuous = FContinuousSound(sfxid);
 	const bool recurring = plmRepeat != nullptr && plmRepeat->gMin >= 0.0f;
 
 	// A looping sound with no handle and no owner object can never be
@@ -4024,7 +3958,7 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 				if (!continuous && !recurring)
 				{
 					if (fDiag)
-						AudioDiag("  dropped: out of range dist=%.0f sStart=%.0f", distance, sStart);
+						AudioDiag("    dropped: out of range dist=%.0f sStart=%.0f", distance, sStart);
 					return;
 				}
 				attenuatedVolume = 0.0f;
@@ -4038,7 +3972,7 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 	if (!amb)
 	{
 		if (fDiag)
-			AudioDiag("  dropped: all sound slots full");
+			AudioDiag("    dropped: all sound slots full");
 		return;
 	}
 	amb->sfxid = sfxid;
@@ -4057,7 +3991,6 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 	amb->frq = frq;
 	amb->rDoppler = uDoppler;
 	amb->fContinuous = continuous ? 1 : 0;
-	amb->fPlayOnce = s_fStartSoundOnce ? 1 : 0;
 	amb->fOutOfRange = outOfRange ? 1 : 0;
 	amb->fAttached = positioned || recurring;
 	amb->lmRepeat = plmRepeat ? *plmRepeat : LM{ -1.0f, 0.0f };
@@ -4083,9 +4016,6 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 		ExecuteEffectGrain(*amb);
 	if (immediateBudget <= 0)
 		amb->handlerDone = true;
-	if (fDiag)
-		AudioDiag("  started voices=%d done=%d continuous=%d",
-			static_cast<int>(amb->voices.size()), amb->handlerDone ? 1 : 0, continuous ? 1 : 0);
 	if (amb->handlerDone && amb->voices.empty())
 	{
 		RemoveAmb(amb);
@@ -4674,9 +4604,6 @@ void UnsetExcitementHyst(EXC* pexc)
 		g_iexcHyst = removedExcitement;
 		SetIexcCurHigh(nullptr);
 	}
-
-	AudioDiag("excitement unset (hyst) iexc=%d curHigh=%d hyst=%d",
-		removedExcitement, s_iexcCurHigh, g_iexcHyst);
 }
 
 EXC* PexcAlloc()
@@ -4740,9 +4667,6 @@ EXC* PexcSetExcitement(IEXC iexc)
 		s_iexcCurHigh = pexc->iexc;
 	}
 
-	AudioDiag("excitement set iexc=%d wasEmpty=%d curHigh=%d hyst=%d",
-		pexc->iexc, wasEmpty ? 1 : 0, s_iexcCurHigh, g_iexcHyst);
-
 	return pexc;
 }
 
@@ -4753,8 +4677,6 @@ void UnsetExcitement(EXC* pexc)
 
 	const IEXC removedExcitement = pexc->iexc;
 	RemoveExc(pexc);
-
-	AudioDiag("excitement unset iexc=%d curHigh=%d", removedExcitement, s_iexcCurHigh);
 
 	if (removedExcitement != s_iexcCurHigh)
 		return;
@@ -5872,14 +5794,6 @@ void StartMusidSong(MUSID musid, const char* fileName)
 	TraceMusicEvent("start_song_complete", static_cast<int>(musid));
 }
 
-void StartSoundOnce(SFXID sfxid, ALO* palo, glm::vec3* ppos, float sStart, float sFull,
-	float uVolAtSource, float frq, float uDoppler)
-{
-	s_fStartSoundOnce = true;
-	StartSound(sfxid, nullptr, palo, ppos, sStart, sFull, uVolAtSource, frq, uDoppler, nullptr, nullptr);
-	s_fStartSoundOnce = false;
-}
-
 bool FContinuousSound(SFXID sfxid)
 {
 	EnsureSfxBankMap();
@@ -6773,11 +6687,7 @@ void UpdateSounds()
 			s_cframeExcitementHyst += 3;
 		}
 
-		const int fSneakyFeetPrevious = g_fSneakyFeet;
 		g_fSneakyFeet = g_iexcHyst < 0 ? 1 : 0;
-		if (g_fSneakyFeet != fSneakyFeetPrevious)
-			AudioDiag("sneaky feet %s (hyst=%d curHigh=%d)",
-				g_fSneakyFeet ? "on" : "off", g_iexcHyst, s_iexcCurHigh);
 		SetGlobalExciteValue(g_iexcHyst + 20);
 
 		if (g_iexcHyst < 0)

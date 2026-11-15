@@ -338,6 +338,8 @@ void ExplodeExplsExplso(EXPLS* pexpls, EXPLSO* pexplso)
 	if (pexpls == nullptr || pexplso == nullptr)
 		return;
 
+	AudioDiag("  explosion style oid=%d delay=%.2f", static_cast<int>(pexpls->oid), pexpls->dtDelay);
+
 	if (pexpls->dtDelay <= 0.0f)
 	{
 		FireExplsExplso(pexpls, pexplso);
