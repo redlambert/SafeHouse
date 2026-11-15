@@ -487,6 +487,9 @@ bool FHasAmbientVag();
 int HsNextFootFall();
 void NextSneakyFootstep();
 
+// TEMPORARY DIAGNOSTIC: appends a timestamped line to audio_diag.log.
+void AudioDiag(const char* format, ...);
+
 // Same as StartSound, but a looping sound plays through once instead of
 // looping forever. For sounds started with no handle and no owner object,
 // which nothing could ever stop (such as a breakable's smash sound).

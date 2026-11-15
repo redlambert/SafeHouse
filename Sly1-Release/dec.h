@@ -4254,6 +4254,8 @@ enum SFXID : int;
 enum REVERBK : int;
 void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sStart, float sFull, float uVolAtSource, float frq, float uDoppler, LM* plmRepeat, LM* plmRepDist);
 void StartSoundOnce(SFXID sfxid, ALO* palo, glm::vec3* ppos, float sStart, float sFull, float uVolAtSource, float frq, float uDoppler);
+// TEMPORARY DIAGNOSTIC: appends a timestamped line to audio_diag.log.
+void AudioDiag(const char* format, ...);
 void DropPamb(AMB** ppamb);
 void StopSound(AMB* pamb, int msRampdown);
 void SetAMRegister(int ireg, byte bVal);
