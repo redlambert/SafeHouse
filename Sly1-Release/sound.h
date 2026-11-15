@@ -476,6 +476,11 @@ double VagPlaybackSeconds();
 bool FHasAmbientVag();
 int HsNextFootFall();
 void NextSneakyFootstep();
+
+// Temporary diagnostics: logs an animation-triggered sound event.
+void TraceAsegSound(const LO* ploAnimation, const LO* ploSound, float tEvent, int sfxidChosen,
+	const int* asfxid, int csfxid, int oidEvent, int sFull, int sStop,
+	float gVolume, float gPitch, float gDoppler);
 void HandleWipeVolumes(int fMusicWipes, float u);
 void ResetCommentaryAudio();
 void SetAttractVolume(bool fMuted);

@@ -174,6 +174,20 @@ void HandleAsegaEvent(ASEGA* pasega, EA* pea, int* pfRetracted)
                     psw, 260, static_cast<OID>(peasnd->oid), paloSearchRoot));
             }
 
+            {
+                int asfxidTrace[6] = {};
+                const int csfxidTrace = std::min<int>(peasnd->csfxid, 6);
+
+                for (int i = 0; i < csfxidTrace; ++i)
+                    asfxidTrace[i] = static_cast<int>(peasnd->asfxid[i]);
+
+                TraceAsegSound(reinterpret_cast<const LO*>(paseg),
+                    reinterpret_cast<const LO*>(paloSound), pea->tLocal,
+                    static_cast<int>(sfxid), asfxidTrace, csfxidTrace,
+                    static_cast<int>(peasnd->oid), peasnd->sFull, peasnd->sStop,
+                    peasnd->gVolume, peasnd->gPitch, peasnd->gDoppler);
+            }
+
             AMB** ppamb = fContinuous ? &pasega->pambContinuous : nullptr;
             if (!paloSound)
                 StartSound(sfxid, ppamb, nullptr, nullptr, 3000.0f, 300.0f, 1.0f, 0.0f, 0.0f, nullptr, nullptr);
