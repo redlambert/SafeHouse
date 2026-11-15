@@ -17,10 +17,11 @@ struct IXAudio2SourceVoice;
 inline constexpr std::size_t kSfxCount = 771;
 inline constexpr std::size_t kEffectBankCount = 7;
 inline constexpr float kSpuMaximumFrequencyRatio = 16383.0f / 4096.0f;
-// First SFXID of each sound bank. Snow.bnk (Fire in the Sky) holds 136
-// sounds and ends right where Clockwerk's sounds begin (691), so it starts at
-// 555, not 593. The old 593 start shifted every Fire in the Sky sound 38 slots
-// off; the guards' footsteps (SFXID 604) played a slide whistle instead.
+// Default first SFXID of each sound bank, used only if the bank files can't
+// be read at startup (see EnsureSfxBankMap). Snow.bnk (Fire in the Sky) holds
+// 136 sounds and ends right where Clockwerk's sounds begin (691), so it starts
+// at 555, not 593. The old 593 start shifted every Fire in the Sky sound 38
+// slots off; the guards' footsteps (SFXID 604) played a slide whistle.
 inline constexpr std::array<std::size_t, 8> kEffectBankStarts =
 {
     0, 169, 234, 370, 491, 555, 691, 771
@@ -589,7 +590,13 @@ extern VagStreamState s_vagStream;
 extern const std::array<const wchar_t*, kEffectBankCount> kEffectBankNames;
 extern LM s_lmRepeatDefault;
 extern LM s_lmDistDefault;
-extern const std::array<SND, kSfxCount> g_mpsfxidsndbnk;
+extern std::array<SND, kSfxCount> g_mpsfxidsndbnk;
+
+// First SFXID of each bank as actually used. Starts as kEffectBankStarts and
+// is replaced by EnsureSfxBankMap() with starts derived from the real sound
+// counts in the extracted bank files, when those counts are consistent.
+extern std::array<std::size_t, 8> g_effectBankStarts;
+void EnsureSfxBankMap();
 
 // Cutscene skip (skipcut.cpp): mutes the output while the skip fast-forwards,
 // and times the dialogue line (VAG) by the game clock instead of the device.

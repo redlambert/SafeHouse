@@ -3603,7 +3603,7 @@ void ConfigureEffectLfo(AMB& amb, const EFFECTBANK::GRAIN& grain)
 void StartEffectChild(AMB& parent, const EFFECTBANK::GRAIN& grain)
 {
 	EFFECTBANK* bank = static_cast<EFFECTBANK*>(parent.bnk);
-	if (!bank || bank->ibnk < 0 || bank->ibnk >= static_cast<int>(kEffectBankStarts.size()) - 1)
+	if (!bank || bank->ibnk < 0 || bank->ibnk >= static_cast<int>(g_effectBankStarts.size()) - 1)
 		return;
 	int32_t volume = 0, pan = 0, soundIndex = -1;
 	std::memcpy(&volume, grain.data.data(), 4);
@@ -3620,7 +3620,7 @@ void StartEffectChild(AMB& parent, const EFFECTBANK::GRAIN& grain)
 	}
 	volume = std::clamp(std::abs(volume), 0, 127);
 	AMB* child = nullptr;
-	const int globalId = static_cast<int>(kEffectBankStarts[bank->ibnk]) + soundIndex;
+	const int globalId = static_cast<int>(g_effectBankStarts[bank->ibnk]) + soundIndex;
 	StartSound(static_cast<SFXID>(globalId), &child, parent.palo,
 		parent.palo ? nullptr : &parent.pos, parent.sStart, parent.sFull,
 		parent.uVolAtSource * static_cast<float>(volume) / 127.0f,
@@ -3815,6 +3815,7 @@ void ExecuteEffectGrain(AMB& amb)
 
 void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sStart, float sFull, float uVolAtSource, float frq, float uDoppler, LM* plmRepeat, LM* plmRepDist)
 {
+	EnsureSfxBankMap();
 	const int index = static_cast<int>(sfxid);
 	if (index < 0 || index >= static_cast<int>(kSfxCount) || g_psw == nullptr)
 	{
@@ -5578,6 +5579,7 @@ void KillSoundSystem()
 
 SoundBankPtr SbpEnsureBank(int ibnk, const char* fileName)
 {
+	EnsureSfxBankMap();
 	const auto bankLoadBegin = std::chrono::steady_clock::now();
 	if (ibnk < 0 || ibnk >= static_cast<int>(kEffectBankCount))
 		return nullptr;
@@ -5724,6 +5726,7 @@ void StartMusidSong(MUSID musid, const char* fileName)
 
 bool FContinuousSound(SFXID sfxid)
 {
+	EnsureSfxBankMap();
 	const int index = static_cast<int>(sfxid);
 	if (index < 0 || index >= static_cast<int>(kSfxCount))
 		return false;
@@ -6868,20 +6871,123 @@ static void UpdateMusicSequencer(double logicalElapsed)
 	}
 }
 
-const std::array<SND, kSfxCount> g_mpsfxidsndbnk = []
+static std::array<SND, kSfxCount> BuildSfxBankMap(const std::array<std::size_t, 8>& starts)
 {
 	std::array<SND, kSfxCount> table{};
+
 	for (int ibnk = 0; ibnk < 7; ++ibnk)
 	{
-		for (std::size_t sfxid = kEffectBankStarts[ibnk];
-			sfxid < kEffectBankStarts[ibnk + 1]; ++sfxid)
+		for (std::size_t sfxid = starts[ibnk];
+			sfxid < starts[ibnk + 1] && sfxid < kSfxCount; ++sfxid)
 		{
 			table[sfxid].ibnk = ibnk;
-			table[sfxid].isnd = static_cast<int>(sfxid - kEffectBankStarts[ibnk]);
+			table[sfxid].isnd = static_cast<int>(sfxid - starts[ibnk]);
 		}
 	}
+
 	return table;
-}();
+}
+
+std::array<std::size_t, 8> g_effectBankStarts = kEffectBankStarts;
+std::array<SND, kSfxCount> g_mpsfxidsndbnk = BuildSfxBankMap(kEffectBankStarts);
+
+// Reads just the sound count from a 989SND bank file's header.
+static int CsoundReadBankHeader(const std::filesystem::path& path)
+{
+	std::ifstream input(ModPath(path), std::ios::binary);
+
+	if (!input.is_open())
+		return -1;
+
+	uint8_t header[24] = {};
+
+	if (!input.read(reinterpret_cast<char*>(header), sizeof(header)))
+		return -1;
+
+	uint32_t fileType = 0;
+	uint32_t metadataOffset = 0;
+	std::memcpy(&fileType, header + 0, 4);
+	std::memcpy(&metadataOffset, header + 8, 4);
+
+	if (fileType != 3)
+		return -1;
+
+	uint8_t metadata[24] = {};
+	input.seekg(metadataOffset);
+
+	if (!input.read(reinterpret_cast<char*>(metadata), sizeof(metadata)))
+		return -1;
+
+	if (std::memcmp(metadata, "SBlk", 4) != 0)
+		return -1;
+
+	uint16_t soundCount = 0;
+	std::memcpy(&soundCount, metadata + 22, 2);
+	return static_cast<int>(soundCount);
+}
+
+// The SFXID ranges of the world banks are laid end to end in bank order.
+// Rather than trusting a hard-coded table, read each world bank's real sound
+// count and lay the ranges out from those. The result is used only if it
+// lands exactly on the total SFXID count; otherwise the table is kept.
+// Writes sound_banks.log next to the game data with what it found.
+void EnsureSfxBankMap()
+{
+	static bool s_fDone = false;
+
+	if (s_fDone)
+		return;
+
+	s_fDone = true;
+
+	std::array<int, kEffectBankCount> acsound{};
+	std::array<std::size_t, 8> starts = kEffectBankStarts;
+	bool fValid = true;
+
+	for (int ibnk = 0; ibnk < static_cast<int>(kEffectBankCount); ++ibnk)
+	{
+		const std::filesystem::path path = FindEffectBank(ibnk, nullptr);
+		acsound[ibnk] = path.empty() ? -1 : CsoundReadBankHeader(path);
+	}
+
+	// The common bank's range (0..168) is fixed; world banks follow it.
+	for (int ibnk = 1; ibnk < 7; ++ibnk)
+	{
+		if (acsound[ibnk] <= 0)
+		{
+			fValid = false;
+			break;
+		}
+
+		starts[ibnk + 1] = starts[ibnk] + static_cast<std::size_t>(acsound[ibnk]);
+	}
+
+	if (fValid && starts[7] != kSfxCount)
+		fValid = false;
+
+	if (fValid)
+	{
+		g_effectBankStarts = starts;
+		g_mpsfxidsndbnk = BuildSfxBankMap(starts);
+	}
+
+	std::ofstream log(ExecutableDirectory() / "sound_banks.log", std::ios::trunc);
+
+	if (!log.is_open())
+		return;
+
+	for (int ibnk = 0; ibnk < static_cast<int>(kEffectBankCount); ++ibnk)
+	{
+		log << "bank " << ibnk
+			<< " sounds=" << acsound[ibnk]
+			<< " tableStart=" << kEffectBankStarts[ibnk]
+			<< " tableCount=" << (kEffectBankStarts[ibnk + 1] - kEffectBankStarts[ibnk])
+			<< " start=" << g_effectBankStarts[ibnk]
+			<< '\n';
+	}
+
+	log << (fValid ? "using counts from bank files\n" : "counts inconsistent, using built-in table\n");
+}
 
 static_assert(g_mpsfxidsndbnk.size() == kSfxCount);
 

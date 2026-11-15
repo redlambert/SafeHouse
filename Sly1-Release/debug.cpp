@@ -647,7 +647,7 @@ void RenderMenuGui(SW* psw)
                         bankName.c_str(), ibnk, bank->sounds.size());
                     if (ImGui::BeginMenu(bankLabel))
                     {
-                        const int firstSfxid = static_cast<int>(kEffectBankStarts[ibnk]);
+                        const int firstSfxid = static_cast<int>(g_effectBankStarts[ibnk]);
                         for (int isnd = 0; isnd < static_cast<int>(bank->sounds.size()); ++isnd)
                         {
                             const int sfxid = firstSfxid + isnd;
