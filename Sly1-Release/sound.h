@@ -17,9 +17,13 @@ struct IXAudio2SourceVoice;
 inline constexpr std::size_t kSfxCount = 771;
 inline constexpr std::size_t kEffectBankCount = 7;
 inline constexpr float kSpuMaximumFrequencyRatio = 16383.0f / 4096.0f;
+// First SFXID of each sound bank. Snow.bnk (Fire in the Sky) holds 136
+// sounds and ends right where Clockwerk's sounds begin (691), so it starts at
+// 555, not 593. The old 593 start shifted every Fire in the Sky sound 38 slots
+// off; the guards' footsteps (SFXID 604) played a slide whistle instead.
 inline constexpr std::array<std::size_t, 8> kEffectBankStarts =
 {
-    0, 169, 234, 370, 491, 593, 691, 771
+    0, 169, 234, 370, 491, 555, 691, 771
 };
 
 struct EXC
@@ -476,11 +480,6 @@ double VagPlaybackSeconds();
 bool FHasAmbientVag();
 int HsNextFootFall();
 void NextSneakyFootstep();
-
-// Temporary diagnostics: logs an animation-triggered sound event.
-void TraceAsegSound(const LO* ploAnimation, const LO* ploSound, float tEvent, int sfxidChosen,
-	const int* asfxid, int csfxid, int oidEvent, int sFull, int sStop,
-	float gVolume, float gPitch, float gDoppler);
 void HandleWipeVolumes(int fMusicWipes, float u);
 void ResetCommentaryAudio();
 void SetAttractVolume(bool fMuted);
