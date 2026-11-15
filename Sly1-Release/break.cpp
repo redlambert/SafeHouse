@@ -553,11 +553,14 @@ void BreakBrk(BRK* pbrk)
 			OnDifficultyBreak(&g_difficulty, &posCoin, pbrk->ccoin, pbrk->fSuppressDifficultyUpdate);
 
 			if (pbrk->psfxBreak == nullptr) {
-				StartSound((SFXID)42, nullptr, nullptr, &pbrk->xf.posWorld, 3000.0f, 300.0f, 1.0f, 0.0f, 0.0f, nullptr, nullptr);
+				StartSoundOnce((SFXID)42, nullptr, &pbrk->xf.posWorld, 3000.0f, 300.0f, 1.0f, 0.0f, 0.0f);
 			}
 			else {
 				SFX* psfx = pbrk->psfxBreak.get();
-				StartSound(psfx->sfxid, nullptr, nullptr, &pbrk->xf.posWorld, psfx->sStart, psfx->sFull, psfx->uVol, 0.0f, 0.0f, nullptr, nullptr);
+				// Breakable smash sounds are fire-and-forget. A few (such as Mz. Ruby's
+				// candles) use a looping recording, which nothing could ever stop, so
+				// play them through once.
+				StartSoundOnce(psfx->sfxid, nullptr, &pbrk->xf.posWorld, psfx->sStart, psfx->sFull, psfx->uVol, 0.0f, 0.0f);
 			}
 		}
 

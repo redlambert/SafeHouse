@@ -92,6 +92,7 @@ struct AMB
     float sStart;
     float sFull;
     int fContinuous;
+    int fPlayOnce;          // loops in the sample play through once, then stop
     int fOutOfRange;
     int fAttached;
     int fStopped;
@@ -481,6 +482,12 @@ double VagPlaybackSeconds();
 bool FHasAmbientVag();
 int HsNextFootFall();
 void NextSneakyFootstep();
+
+// Same as StartSound, but a looping sound plays through once instead of
+// looping forever. For sounds started with no handle and no owner object,
+// which nothing could ever stop (such as a breakable's smash sound).
+void StartSoundOnce(SFXID sfxid, ALO* palo, glm::vec3* ppos, float sStart, float sFull,
+	float uVolAtSource, float frq, float uDoppler);
 void HandleWipeVolumes(int fMusicWipes, float u);
 void ResetCommentaryAudio();
 void SetAttractVolume(bool fMuted);

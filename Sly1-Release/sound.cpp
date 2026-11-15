@@ -3247,6 +3247,9 @@ static bool ReserveEffectHardwareVoice(int incomingPriority)
 	return true;
 }
 
+// Set only while StartSoundOnce is starting its sound.
+static bool s_fStartSoundOnce = false;
+
 bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& sound,
 	const EFFECTBANK::TONE& tone, float applicationVolume, float pitchMod)
 {
@@ -3303,6 +3306,9 @@ bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& s
 	{
 		return false;
 	}
+	if (amb.fPlayOnce)
+		decoded.loop = false;
+
 	EFFECTVOICE active;
 	active.pcm = std::move(decoded.pcm);
 	active.loop = decoded.loop;
@@ -3863,8 +3869,25 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 			StopSound(weakest, 0);
 		}
 	}
-	const bool continuous = FContinuousSound(sfxid);
+	const bool continuous = FContinuousSound(sfxid) && !s_fStartSoundOnce;
 	const bool recurring = plmRepeat != nullptr && plmRepeat->gMin >= 0.0f;
+
+	// A looping sound with no handle and no owner object can never be
+	// stopped. Log each one once (sound_loops.log) so any other cases like
+	// the breakable candle can be found and fixed.
+	if (continuous && ppamb == nullptr && palo == nullptr && !recurring)
+	{
+		static std::array<bool, kSfxCount> s_mpsfxidLogged{};
+
+		if (!s_mpsfxidLogged[index])
+		{
+			s_mpsfxidLogged[index] = true;
+			std::ofstream log(ExecutableDirectory() / "sound_loops.log", std::ios::app);
+
+			if (log.is_open())
+				log << "unowned looping sound sfx=" << index << '\n';
+		}
+	}
 	float attenuatedVolume = uVolAtSource;
 	glm::vec3 position{};
 	bool positioned = false;
@@ -3921,6 +3944,7 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 	amb->frq = frq;
 	amb->rDoppler = uDoppler;
 	amb->fContinuous = continuous ? 1 : 0;
+	amb->fPlayOnce = s_fStartSoundOnce ? 1 : 0;
 	amb->fOutOfRange = outOfRange ? 1 : 0;
 	amb->fAttached = positioned || recurring;
 	amb->lmRepeat = plmRepeat ? *plmRepeat : LM{ -1.0f, 0.0f };
@@ -5722,6 +5746,14 @@ void StartMusidSong(MUSID musid, const char* fileName)
 	s_musicStream.paused = false;
 	s_musicTraceHadVoices = !s_music989.voices.empty();
 	TraceMusicEvent("start_song_complete", static_cast<int>(musid));
+}
+
+void StartSoundOnce(SFXID sfxid, ALO* palo, glm::vec3* ppos, float sStart, float sFull,
+	float uVolAtSource, float frq, float uDoppler)
+{
+	s_fStartSoundOnce = true;
+	StartSound(sfxid, nullptr, palo, ppos, sStart, sFull, uVolAtSource, frq, uDoppler, nullptr, nullptr);
+	s_fStartSoundOnce = false;
 }
 
 bool FContinuousSound(SFXID sfxid)
