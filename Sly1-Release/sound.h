@@ -24,7 +24,7 @@ inline constexpr float kSpuMaximumFrequencyRatio = 16383.0f / 4096.0f;
 // slots off; the guards' footsteps (SFXID 604) played a slide whistle.
 inline constexpr std::array<std::size_t, 8> kEffectBankStarts =
 {
-    0, 169, 234, 370, 491, 555, 691, 771
+    0, 169, 234, 355, 457, 555, 691, 771
 };
 
 struct EXC
@@ -369,6 +369,10 @@ struct DecodedEffectSample
     std::vector<int16_t> pcm;
     uint32_t loopBegin = 0;
     uint32_t loopLength = 0;
+    // Length of the sample as recorded: the intro plus one pass of the loop.
+    // The decoder can append extra loop passes for seamless looping, so a
+    // play-once sound cuts the buffer back to this length.
+    uint32_t onePassLength = 0;
     bool loop = false;
 };
 

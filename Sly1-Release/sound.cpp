@@ -2973,6 +2973,7 @@ bool DecodeEffectAdpcm(const EFFECTBANK& bank, uint32_t sampleOffset,
 	// predictor state repeats. Replacing the first pass with the final pass made
 	// the intro jump directly to a different predictor state; some ambient loops
 	// produced a nearly full-scale discontinuity during world startup.
+	decoded.onePassLength = static_cast<uint32_t>(decoded.pcm.size());
 	if (decoded.loop && loopBlockStart < loopBlockEnd)
 	{
 		const std::size_t originalPcmSize = decoded.pcm.size();
@@ -3307,7 +3308,13 @@ bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& s
 		return false;
 	}
 	if (amb.fPlayOnce)
+	{
+		// Play the sample as recorded (intro plus one loop pass), not the extra
+		// loop passes the decoder added for seamless looping.
+		if (decoded.loop && decoded.onePassLength > 0 && decoded.onePassLength < decoded.pcm.size())
+			decoded.pcm.resize(decoded.onePassLength);
 		decoded.loop = false;
+	}
 
 	EFFECTVOICE active;
 	active.pcm = std::move(decoded.pcm);
