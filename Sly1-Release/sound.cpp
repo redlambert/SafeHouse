@@ -41,7 +41,6 @@
 #else
 #include "../platform/audio_linux.h"
 #endif
-#include <cstdarg>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -3248,37 +3247,6 @@ static bool ReserveEffectHardwareVoice(int incomingPriority)
 	return true;
 }
 
-// TEMPORARY DIAGNOSTIC (audio_diag.log). Remove after testing.
-float g_tAudioDiagUntil = -1.0f;
-
-void AudioDiag(const char* format, ...)
-{
-	constexpr int kLineLimit = 20000;
-	static int s_cLines = 0;
-	static std::ofstream s_log;
-
-	if (s_cLines >= kLineLimit)
-		return;
-
-	if (!s_log.is_open())
-	{
-		s_log.open(ExecutableDirectory() / "audio_diag.log", std::ios::trunc);
-
-		if (!s_log.is_open())
-			return;
-	}
-
-	char line[512];
-	va_list args;
-	va_start(args, format);
-	std::vsnprintf(line, sizeof(line), format, args);
-	va_end(args);
-
-	s_log << "t=" << g_clock.t << ' ' << line << '\n';
-	++s_cLines;
-	s_log.flush();
-}
-
 bool PlayEffectTone(AMB& amb, const EFFECTBANK& bank, const EFFECTBANK::SOUND& sound,
 	const EFFECTBANK::TONE& tone, float applicationVolume, float pitchMod)
 {
@@ -3854,15 +3822,8 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 		return;
 	}
 	const SND& mapping = g_mpsfxidsndbnk[index];
-	const bool fDiag = g_clock.t <= g_tAudioDiagUntil;
-	if (fDiag)
-		AudioDiag("  sound start sfx=%d handle=%d owner=%d pos=%d vol=%.2f frq=%.3f sStart=%.0f looping=%d",
-			index, ppamb ? 1 : 0, palo ? static_cast<int>(reinterpret_cast<LO*>(palo)->oid) : -1,
-			ppos ? 1 : 0, uVolAtSource, frq, sStart, FContinuousSound(sfxid) ? 1 : 0);
 	if (mapping.ibnk > 0 && mapping.ibnk != g_psw->ibnk)
 	{
-		if (fDiag)
-			AudioDiag("    dropped: sound is in bank %d, world bank is %d", mapping.ibnk, g_psw->ibnk);
 		return;
 	}
 	EFFECTBANK* bank = static_cast<EFFECTBANK*>(SbpEnsureBank(mapping.ibnk));
@@ -3957,8 +3918,6 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 				// can start playing when the listener subsequently enters range.
 				if (!continuous && !recurring)
 				{
-					if (fDiag)
-						AudioDiag("    dropped: out of range dist=%.0f sStart=%.0f", distance, sStart);
 					return;
 				}
 				attenuatedVolume = 0.0f;
@@ -3971,8 +3930,6 @@ void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sSta
 	AMB* amb = PambAlloc();
 	if (!amb)
 	{
-		if (fDiag)
-			AudioDiag("    dropped: all sound slots full");
 		return;
 	}
 	amb->sfxid = sfxid;
@@ -6996,11 +6953,10 @@ static int CsoundReadBankHeader(const std::filesystem::path& path)
 	return static_cast<int>(soundCount);
 }
 
-// The SFXID ranges of the world banks are laid end to end in bank order.
-// Rather than trusting a hard-coded table, read each world bank's real sound
-// count and lay the ranges out from those. The result is used only if it
-// lands exactly on the total SFXID count; otherwise the table is kept.
-// Writes sound_banks.log next to the game data with what it found.
+// The SFXID map is the executable's own table (kEffectBankStarts). This only
+// checks that each bank file holds as many sounds as its SFXID range, which
+// catches bank files loaded in the wrong order. Writes sound_banks.log next to
+// the game data.
 void EnsureSfxBankMap()
 {
 	static bool s_fDone = false;
@@ -7010,53 +6966,32 @@ void EnsureSfxBankMap()
 
 	s_fDone = true;
 
-	std::array<int, kEffectBankCount> acsound{};
-	std::array<std::size_t, 8> starts = kEffectBankStarts;
-	bool fValid = true;
-
-	for (int ibnk = 0; ibnk < static_cast<int>(kEffectBankCount); ++ibnk)
-	{
-		const std::filesystem::path path = FindEffectBank(ibnk, nullptr);
-		acsound[ibnk] = path.empty() ? -1 : CsoundReadBankHeader(path);
-	}
-
-	// The common bank's range (0..168) is fixed; world banks follow it.
-	for (int ibnk = 1; ibnk < 7; ++ibnk)
-	{
-		if (acsound[ibnk] <= 0)
-		{
-			fValid = false;
-			break;
-		}
-
-		starts[ibnk + 1] = starts[ibnk] + static_cast<std::size_t>(acsound[ibnk]);
-	}
-
-	if (fValid && starts[7] != kSfxCount)
-		fValid = false;
-
-	if (fValid)
-	{
-		g_effectBankStarts = starts;
-		g_mpsfxidsndbnk = BuildSfxBankMap(starts);
-	}
-
 	std::ofstream log(ExecutableDirectory() / "sound_banks.log", std::ios::trunc);
 
 	if (!log.is_open())
 		return;
 
+	bool fAllMatch = true;
+
 	for (int ibnk = 0; ibnk < static_cast<int>(kEffectBankCount); ++ibnk)
 	{
+		const std::filesystem::path path = FindEffectBank(ibnk, nullptr);
+		const int csound = path.empty() ? -1 : CsoundReadBankHeader(path);
+		const int crange = static_cast<int>(kEffectBankStarts[ibnk + 1] - kEffectBankStarts[ibnk]);
+		const bool fMatch = csound == crange;
+
+		fAllMatch = fAllMatch && fMatch;
+
 		log << "bank " << ibnk
-			<< " sounds=" << acsound[ibnk]
-			<< " tableStart=" << kEffectBankStarts[ibnk]
-			<< " tableCount=" << (kEffectBankStarts[ibnk + 1] - kEffectBankStarts[ibnk])
-			<< " start=" << g_effectBankStarts[ibnk]
+			<< " file=" << path.filename().string()
+			<< " sounds=" << csound
+			<< " start=" << kEffectBankStarts[ibnk]
+			<< " count=" << crange
+			<< (fMatch ? " ok" : " MISMATCH")
 			<< '\n';
 	}
 
-	log << (fValid ? "using counts from bank files\n" : "counts inconsistent, using built-in table\n");
+	log << (fAllMatch ? "all bank files match the SFXID table\n" : "some bank files do not match the SFXID table\n");
 }
 
 static_assert(g_mpsfxidsndbnk.size() == kSfxCount);
@@ -7096,10 +7031,15 @@ std::array<int8_t, 32> s_effectGlobalRegisters{};
 float s_tLastIntermittent = -100000.0f;
 int s_fPauseAmbients = 0;
 VagStreamState s_vagStream;
+// Bank file for each IBNK, in the order of SCUS_971.98's sound bank table.
+// The installer writes table entry N to these file names, so this order is
+// what links an IBNK to its data. The names themselves are only labels: the
+// files they describe do not match the worlds that use them (IBNK 4, Mz.
+// Ruby's world, is stored in Muggshot.bnk).
 const std::array<const wchar_t*, kEffectBankCount> kEffectBankNames =
 {
-	L"Common.bnk", L"Intro.bnk", L"Underwater.bnk", L"Muggshot.bnk",
-	L"Voodoo.bnk", L"Snow.bnk", L"Clockwerk.bnk"
+	L"Common.bnk", L"Intro.bnk", L"Snow.bnk", L"Underwater.bnk",
+	L"Muggshot.bnk", L"Voodoo.bnk", L"Clockwerk.bnk"
 };
 LM s_lmRepeatDefault = { 4.0f, 6.0f };
 LM s_lmDistDefault = { 3000.0f, 8000.0f };

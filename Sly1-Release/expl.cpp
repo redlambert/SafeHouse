@@ -282,9 +282,6 @@ void FireExplsExplso(EXPLS* pexpls, EXPLSO* pexplso)
 
     EmitParticles(cParticle, &emitb, pemitg);
 
-    AudioDiag("  explosion fires oid=%d particles=%d sound=%d", static_cast<int>(pexpls->oid),
-        cParticle, pexpls->psfx ? static_cast<int>(pexpls->psfx.get()->sfxid) : -1);
-
     if (!pexpls->psfx)
         return;
 

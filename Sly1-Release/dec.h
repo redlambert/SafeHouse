@@ -4253,11 +4253,6 @@ struct AMB;
 enum SFXID : int;
 enum REVERBK : int;
 void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sStart, float sFull, float uVolAtSource, float frq, float uDoppler, LM* plmRepeat, LM* plmRepDist);
-bool FContinuousSound(SFXID sfxid);
-// TEMPORARY DIAGNOSTIC (audio_diag.log). StartSound logs every start while
-// g_clock.t <= g_tAudioDiagUntil; breakables open a one-second window.
-void AudioDiag(const char* format, ...);
-extern float g_tAudioDiagUntil;
 void DropPamb(AMB** ppamb);
 void StopSound(AMB* pamb, int msRampdown);
 void SetAMRegister(int ireg, byte bVal);

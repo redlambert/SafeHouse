@@ -846,8 +846,10 @@ void LoadSwFromBrx(SW* psw, CBinaryInputStream* pbis)
 	LoadTexturesFromBrx(pbis);
 	// Bind/post-load callbacks can immediately start world ambience, so the
 	// requested effects bank must already be resident at this point.
+	// The level's bank file name only identifies the IBNK. The file holding that
+	// IBNK's data comes from kEffectBankNames (see sound.cpp).
 	if (psw->ibnk >= 0)
-		SbpEnsureBank(psw->ibnk, psw->soundBankFileName.data());
+		SbpEnsureBank(psw->ibnk);
 
 	CreateSwPrizes(psw);
 	ProcessSwCallbacks(psw);

@@ -17,14 +17,13 @@ struct IXAudio2SourceVoice;
 inline constexpr std::size_t kSfxCount = 771;
 inline constexpr std::size_t kEffectBankCount = 7;
 inline constexpr float kSpuMaximumFrequencyRatio = 16383.0f / 4096.0f;
-// Default first SFXID of each sound bank, used only if the bank files can't
-// be read at startup (see EnsureSfxBankMap). Snow.bnk (Fire in the Sky) holds
-// 136 sounds and ends right where Clockwerk's sounds begin (691), so it starts
-// at 555, not 593. The old 593 start shifted every Fire in the Sky sound 38
-// slots off; the guards' footsteps (SFXID 604) played a slide whistle.
+// First SFXID of each IBNK, from the SFXID-to-bank table in SCUS_971.98
+// (file offset 0x146020: 771 pairs of int32 ibnk, isnd). Each IBNK's SFXIDs
+// are contiguous, and each range's size matches its bank file exactly once the
+// files are loaded in the executable's order (see kEffectBankNames).
 inline constexpr std::array<std::size_t, 8> kEffectBankStarts =
 {
-    0, 169, 234, 355, 457, 555, 691, 771
+    0, 169, 234, 370, 491, 593, 691, 771
 };
 
 struct EXC
@@ -532,10 +531,6 @@ void KillSoundSystem();
 SoundBankPtr SbpEnsureBank(int ibnk, const char* fileName = nullptr);
 void UnloadEffectBank();
 bool FContinuousSound(SFXID sfxid);
-// TEMPORARY DIAGNOSTIC (audio_diag.log). StartSound logs every start while
-// g_clock.t <= g_tAudioDiagUntil; breakables open a one-second window.
-void AudioDiag(const char* format, ...);
-extern float g_tAudioDiagUntil;
 void SetSwDefaultReverb(SW* psw, REVERBK rvrbk, int depth);
 
 void StartupSound();
@@ -597,9 +592,8 @@ extern LM s_lmRepeatDefault;
 extern LM s_lmDistDefault;
 extern std::array<SND, kSfxCount> g_mpsfxidsndbnk;
 
-// First SFXID of each bank as actually used. Starts as kEffectBankStarts and
-// is replaced by EnsureSfxBankMap() with starts derived from the real sound
-// counts in the extracted bank files, when those counts are consistent.
+// First SFXID of each bank as used by the map. Always kEffectBankStarts;
+// EnsureSfxBankMap() only checks the bank files against it.
 extern std::array<std::size_t, 8> g_effectBankStarts;
 void EnsureSfxBankMap();
 
