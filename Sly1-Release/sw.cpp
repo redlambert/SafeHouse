@@ -1322,11 +1322,13 @@ void ReleaseSwLetterbox(SW* psw)
 
 EXC* SetExcitement(SW* psw, IEXC iexc) 
 {
+	TraceAudioDiag("level script excitement set %d", iexc);
 	return PexcSetExcitement(iexc);
 }
 
 void UnsetExcitementSw(EXC* pexc)
 {
+	TraceAudioDiag("level script excitement unset");
 	UnsetExcitementHyst(pexc);
 }
 

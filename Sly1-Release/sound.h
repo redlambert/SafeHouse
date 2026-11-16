@@ -554,6 +554,8 @@ void ServiceAudioDevice();
 void SetEerieAudioTraceEnabled(bool enabled);
 bool FEerieAudioTraceEnabled();
 void SetMusicDropoutTraceEnabled(bool enabled);
+// TEMPORARY DIAGNOSTIC: adds a line to MusicDiagnostics/music_dropout_trace.log.
+void TraceAudioDiag(const char* format, ...);
 bool FMusicDropoutTraceEnabled();
 
 // Sound globals

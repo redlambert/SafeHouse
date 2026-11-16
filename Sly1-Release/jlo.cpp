@@ -433,6 +433,7 @@ void SetJloJlovol(JLO* pjlo, JLOVOL* pjlovol)
 	{
 		if (pjlo->pexc != nullptr) 
 		{
+			TraceAudioDiag("jlo oid=%d excitement off", static_cast<int>(pjlo->oid));
 			UnsetExcitementHyst(pjlo->pexc);
 			pjlo->pexc = nullptr;
 		}
@@ -444,7 +445,10 @@ void SetJloJlovol(JLO* pjlo, JLOVOL* pjlovol)
 	ReloadRwm(pjlo->prwm);
 
 	if (pjlo->pexc == nullptr)
+	{
+		TraceAudioDiag("jlo oid=%d excitement on", static_cast<int>(pjlo->oid));
 		pjlo->pexc = (EXC*)PexcSetExcitement(107);
+	}
 }
 
 void FireJlo(JLO* pjlo)

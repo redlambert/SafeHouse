@@ -1,3 +1,4 @@
+#include <unordered_set>
 #include "smartguard.h"
 #include "chkpnt.h"
 #include "flash.h"
@@ -278,7 +279,14 @@ int FDetectSmartguard(SMARTGUARD* psmartguard)
         return 0;
 
     if (psmartguard->sgf.pflash == nullptr)
+    {
+        // TEMPORARY DIAGNOSTIC: log once per guard that it has no flashlight.
+        static std::unordered_set<const void*> s_loggedNoFlash;
+        if (s_loggedNoFlash.insert(psmartguard).second)
+            TraceAudioDiag("smartguard oid=%d has no flashlight, sneak check skipped",
+                static_cast<int>(psmartguard->oid));
         return 0;
+    }
 
     if (psmartguard->sgs == SGS_Dying || psmartguard->sgs == SGS_Stun)
         return 0;
@@ -303,6 +311,12 @@ int FDetectSmartguard(SMARTGUARD* psmartguard)
         fSneak = FCheckVolPoint(psmartguard->pvolSneak, &posEnemy);
     else
         fSneak = sEnemy < psmartguard->sSneak && zEnemy < psmartguard->zSneak;
+
+    // TEMPORARY DIAGNOSTIC: log when this guard's sneak result changes.
+    if (fSneak != (psmartguard->pexcSneak != nullptr ? 1 : 0))
+        TraceAudioDiag("smartguard oid=%d sneak=%d dist=%.0f dz=%.0f sSneak=%.0f zSneak=%.0f vol=%d",
+            static_cast<int>(psmartguard->oid), fSneak, sEnemy, zEnemy, psmartguard->sSneak,
+            psmartguard->zSneak, psmartguard->pvolSneak != nullptr ? 1 : 0);
 
     if (fSneak) {
         if (psmartguard->pexcSneak == nullptr)

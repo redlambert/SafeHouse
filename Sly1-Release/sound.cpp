@@ -41,6 +41,7 @@
 #else
 #include "../platform/audio_linux.h"
 #endif
+#include <cstdarg>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -137,6 +138,24 @@ static void TraceMusicEvent(const char* event, int value0 = -1, int value1 = -1)
 		s_musicDropoutTrace << entry;
 		s_musicDropoutTrace.flush();
 	}
+}
+
+// TEMPORARY DIAGNOSTIC: free-form lines in the music trace. Remove after testing.
+void TraceAudioDiag(const char* format, ...)
+{
+	std::lock_guard<std::recursive_mutex> lock(s_musicMutex);
+	if (!s_musicDropoutTraceEnabled || !s_musicDropoutTrace.is_open())
+		return;
+
+	char text[384];
+	va_list args;
+	va_start(args, format);
+	std::vsnprintf(text, sizeof(text), format, args);
+	va_end(args);
+
+	s_musicDropoutTrace << "DIAG t=" << std::fixed << std::setprecision(3) << g_clock.t
+		<< " excite=" << static_cast<unsigned>(s_globalExcite) << ' ' << text << '\n';
+	s_musicDropoutTrace.flush();
 }
 
 struct AudioOutputDevice
@@ -4618,6 +4637,8 @@ void UnsetExcitementHyst(EXC* pexc)
 		g_iexcHyst = removedExcitement;
 		SetIexcCurHigh(nullptr);
 	}
+
+	TraceAudioDiag("exc_unset_hyst iexc=%d curHigh=%d hyst=%d", removedExcitement, s_iexcCurHigh, g_iexcHyst);
 }
 
 EXC* PexcAlloc()
@@ -4681,6 +4702,7 @@ EXC* PexcSetExcitement(IEXC iexc)
 		s_iexcCurHigh = pexc->iexc;
 	}
 
+	TraceAudioDiag("exc_set iexc=%d curHigh=%d hyst=%d", pexc->iexc, s_iexcCurHigh, g_iexcHyst);
 	return pexc;
 }
 
@@ -4691,6 +4713,8 @@ void UnsetExcitement(EXC* pexc)
 
 	const IEXC removedExcitement = pexc->iexc;
 	RemoveExc(pexc);
+
+	TraceAudioDiag("exc_unset iexc=%d curHigh=%d", removedExcitement, s_iexcCurHigh);
 
 	if (removedExcitement != s_iexcCurHigh)
 		return;
@@ -4858,6 +4882,7 @@ void NextSneakyFootstep()
 		return;
 
 	const int hsFootfall = HsNextFootFall();
+	TraceAudioDiag("tiptoe hs=%d", hsFootfall);
 	StartSound(static_cast<SFXID>(119), nullptr, nullptr, nullptr, 0.0f, 0.0f, 0.5f,
 		static_cast<float>(hsFootfall) * (1.0f / 12.0f), 0.0f, nullptr, nullptr);
 }
@@ -6686,8 +6711,19 @@ void UpdateSounds()
 	if (s_vagStream.loaded && s_vagStream.started && !s_vagStream.paused)
 		FVagPlaying();
 
+	{
+		// TEMPORARY DIAGNOSTIC: record music and excitement for this session.
+		static bool s_fDiagTraceStarted = false;
+		if (!s_fDiagTraceStarted)
+		{
+			s_fDiagTraceStarted = true;
+			SetMusicDropoutTraceEnabled(true);
+		}
+	}
+
 	if (g_iexcHyst != -100)
 	{
+		const int iexcHystBefore = g_iexcHyst;
 		// Retail raises positive excitement immediately, but walks downward and
 		// through the sneaking range one step every three sound updates.
 		if (s_iexcCurHigh > g_iexcHyst && s_iexcCurHigh > 0)
@@ -6712,8 +6748,14 @@ void UpdateSounds()
 		else
 			SetMvgkRvol(1.0f, 7, 1);
 
+		if (g_iexcHyst != iexcHystBefore)
+			TraceAudioDiag("exc_step hyst=%d curHigh=%d sneakyFeet=%d", g_iexcHyst, s_iexcCurHigh, g_fSneakyFeet);
+
 		if (g_iexcHyst == s_iexcCurHigh)
+		{
 			g_iexcHyst = -100;
+			TraceAudioDiag("exc_settled curHigh=%d", s_iexcCurHigh);
+		}
 	}
 
 	const auto effectNow = std::chrono::steady_clock::now();
