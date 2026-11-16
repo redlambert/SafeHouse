@@ -1386,34 +1386,38 @@ int IsurfFromBspSurf(const GEOM& geom, const SURF* psurf)
     return static_cast<int>(psurf - asurfBase);
 }
 
-MTLKWA s_mpmtlkwaMu[12] = 
+// Both tables are copied from SCUS_971.98 (file offsets 0x165840 and
+// 0x1658a8), one row per MTLK.
+MTLKWA s_mpmtlkwaMu[MTLK_Max] = 
 {
-    { 1.0f, 0.5f  },
-    { 3.0f, 2.4f  },
-    { 1.0f, 0.4f  },
-    { 1.0f, 0.5f  },
-    { 1.0f, 0.4f  },
-    { 1.0f, 1.0f  },
-    { 5.0f, 0.5f  },
-    { 1.0f, 1.5f  },
-    { 3.0f, 1.5f  },
-    { 1.0f, 0.5f  },
-    { 1.0f, 0.5f   },
-    { 1.0f, -10.0f },
+    { 1.0f, 0.5f   },  // Default
+    { 3.0f, 2.4f   },  // Sand
+    { 1.0f, 0.4f   },  // Metal
+    { 1.0f, 0.5f   },  // Wood
+    { 1.0f, 0.4f   },  // Rock
+    { 1.0f, 1.0f   },  // Rubber
+    { 5.0f, 0.5f   },  // Ice
+    { 1.0f, 1.5f   },  // Tire
+    { 3.0f, 1.5f   },  // Velcro
+    { 3.0f, 2.4f   },  // Unnamed9
+    { 1.0f, 0.5f   },  // NoBounce
+    { 1.0f, -10.0f },  // NoFriction
+    { 1.0f, -10.0f },  // NoFrictionElastic
 };
 
-MTLKWA s_mpmtlkwaElas[12] = 
+MTLKWA s_mpmtlkwaElas[MTLK_Max] = 
 {
-    { 1.0f, 0.5f },
-    { 5.0f, 1.0f },
-    { 1.0f, 0.8f },
-    { 1.0f, 0.4f },
-    { 1.0f, 0.6f },
-    { 1.0f, 0.9f },
-    { 1.0f, 0.1f },
-    { 1.0f, -1.0f },
-    { 1.0f, -1.0f },
-    { 1.0f, -1.0f },
-    { 1.0f, -1.0f },
-    { 1.0f, 1.0f },
+    { 1.0f, 0.5f  },  // Default
+    { 5.0f, 1.0f  },  // Sand
+    { 1.0f, 0.8f  },  // Metal
+    { 1.0f, 0.4f  },  // Wood
+    { 1.0f, 0.6f  },  // Rock
+    { 1.0f, 0.9f  },  // Rubber
+    { 1.0f, 0.1f  },  // Ice
+    { 1.0f, -1.0f },  // Tire
+    { 1.0f, -1.0f },  // Velcro
+    { 1.0f, -1.0f },  // Unnamed9
+    { 1.0f, -1.0f },  // NoBounce
+    { 1.0f, 0.5f  },  // NoFriction
+    { 1.0f, 1.0f  },  // NoFrictionElastic
 };

@@ -428,5 +428,5 @@ SNIP s_asnipTurret[3] =
 {
     0, (OID)0x356, offsetof(TURRET, prwm),
     0, (OID)0x357, offsetof(TURRET, psmTurret),
-    2, (OID)0x35,  offsetof(TURRET, ppntAnchor)
+    2, (OID)0x35C, offsetof(TURRET, ppntAnchor)
 };

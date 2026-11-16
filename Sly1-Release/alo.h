@@ -43,10 +43,13 @@ enum MTLK : int
 	MTLK_Ice = 6,
 	MTLK_Tire = 7,
 	MTLK_Velcro = 8,
-	MTLK_NoBounce = 9,
-	MTLK_NoFriction = 10,
-	MTLK_NoFrictionElastic = 11,
-	MTLK_Max = 12
+	// The retail tables have a surface kind here whose name is unknown
+	// (friction like Sand, no bounce). Level data uses the retail numbers.
+	MTLK_Unnamed9 = 9,
+	MTLK_NoBounce = 10,
+	MTLK_NoFriction = 11,
+	MTLK_NoFrictionElastic = 12,
+	MTLK_Max = 13
 };
 enum ZONS : unsigned int
 {

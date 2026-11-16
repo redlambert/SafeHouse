@@ -3619,6 +3619,21 @@ void StartEffectChild(AMB& parent, const EFFECTBANK::GRAIN& grain)
 			volume = s_effectGlobalRegisters[-volume - 6];
 	}
 	volume = std::clamp(std::abs(volume), 0, 127);
+	// A negative pan means a register (-1..-4 local, -6 and below global) or
+	// random (-5), as for a tone's pan.
+	if (pan < 0)
+	{
+		int registerValue = 0;
+		if (pan >= -4) registerValue = parent.registers[-pan - 1];
+		else if (pan == -5) registerValue = std::rand() % 127;
+		else if (-pan - 6 < static_cast<int>(s_effectGlobalRegisters.size()))
+			registerValue = s_effectGlobalRegisters[-pan - 6];
+		pan = 360 * (std::min)(std::abs(registerValue), 127) / 127;
+		// child->pan is in -1..1 (about -180..180 degrees), so use the
+		// signed angle.
+		if (pan > 180)
+			pan -= 360;
+	}
 	AMB* child = nullptr;
 	const int globalId = static_cast<int>(g_effectBankStarts[bank->ibnk]) + soundIndex;
 	StartSound(static_cast<SFXID>(globalId), &child, parent.palo,

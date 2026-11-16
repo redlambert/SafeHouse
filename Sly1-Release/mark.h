@@ -60,5 +60,5 @@ void AddSoXps(SO* psoRoot, SO* psoOther, int fCenterXp, int cbspPruned, BSP* abs
 XP*  PxpMarkSwContactsRoot(SW* psw, SO** apso, int fCenterXp);
 static int IsurfFromBspSurf(const GEOM& geom, const SURF* psurf);
 
-extern MTLKWA s_mpmtlkwaMu[12];
-extern MTLKWA s_mpmtlkwaElas[12];
+extern MTLKWA s_mpmtlkwaMu[MTLK_Max];
+extern MTLKWA s_mpmtlkwaElas[MTLK_Max];
