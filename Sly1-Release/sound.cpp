@@ -3526,6 +3526,8 @@ int EffectLfoValue(EFFECTLFO& lfo)
 	return (lfo.setupFlags & 1) != 0 ? -value : value;
 }
 
+static void CalcEffectLfoRange(const AMB& amb, EFFECTLFO& lfo);
+
 void TickEffectLfos(AMB& amb)
 {
 	for (EFFECTLFO& lfo : amb.lfos)
@@ -3547,6 +3549,31 @@ void TickEffectLfos(AMB& amb)
 				(static_cast<int64_t>(lfo.range) * value) >> 15,
 				-32768, 32767));
 			break;
+		case 5: // vary the speed of LFO targetExtra (989snd.irx 0x18998)
+		{
+			if (lfo.targetExtra >= amb.lfos.size())
+				break;
+			EFFECTLFO& other = amb.lfos[lfo.targetExtra];
+			const uint32_t scaled = ((other.origStepSize >> 8) * static_cast<uint16_t>(lfo.depth)) >> 10;
+			const int32_t product = static_cast<int32_t>(static_cast<uint32_t>(
+				static_cast<int64_t>(static_cast<int32_t>(scaled)) * value));
+			const int32_t delta = product >> 15;
+			other.stepSize = other.origStepSize + (static_cast<uint32_t>(delta) << 8);
+			break;
+		}
+		case 6: // vary the depth of LFO targetExtra (989snd.irx 0x18a58)
+		{
+			if (lfo.targetExtra >= amb.lfos.size())
+				break;
+			EFFECTLFO& other = amb.lfos[lfo.targetExtra];
+			const uint32_t scaled = (static_cast<uint32_t>(other.origDepth) * static_cast<uint16_t>(lfo.depth)) >> 10;
+			const int32_t product = static_cast<int32_t>(static_cast<uint32_t>(
+				static_cast<int64_t>(static_cast<int32_t>(scaled)) * value));
+			const int32_t delta = product >> 15;
+			other.depth = static_cast<int16_t>(static_cast<uint16_t>(other.origDepth + delta));
+			CalcEffectLfoRange(amb, other);
+			break;
+		}
 		default: break;
 		}
 	}
@@ -3562,6 +3589,23 @@ void TickEffectLfos(AMB& amb)
 				"Update gameplay-effect LFO volume");
 			SetEffectVoicePan(active.voice, active.authoredPan + amb.lfoPan + EffectSpatialPanDegrees(amb.pan));
 		}
+}
+
+// Range of an LFO from its target and current depth (989snd.irx 0x18bd8).
+// Targets 5 and 6 drive another LFO and have no range of their own.
+static void CalcEffectLfoRange(const AMB& amb, EFFECTLFO& lfo)
+{
+	const EFFECTBANK* bank = static_cast<const EFFECTBANK*>(amb.bnk);
+	const int soundVolume = bank && amb.soundIndex >= 0 && amb.soundIndex < static_cast<int>(bank->sounds.size())
+		? bank->sounds[amb.soundIndex].volume : 127;
+	switch (lfo.target)
+	{
+	case 1: lfo.range = (soundVolume * lfo.depth) >> 10; break;
+	case 2: lfo.range = (180 * lfo.depth) >> 10; break;
+	case 3: lfo.range = (6096 * lfo.depth) >> 10; break;
+	case 4: lfo.range = (0x7fff * lfo.depth) >> 10; break;
+	default: lfo.range = 0; break;
+	}
 }
 
 void ConfigureEffectLfo(AMB& amb, const EFFECTBANK::GRAIN& grain)
@@ -3581,21 +3625,19 @@ void ConfigureEffectLfo(AMB& amb, const EFFECTBANK::GRAIN& grain)
 	std::memcpy(&startOffset, grain.data.data() + 10, 2);
 	std::memcpy(&lfo.stepSize, grain.data.data() + 12, 4);
 	lfo.depth = static_cast<int16_t>(depth);
+	lfo.origDepth = depth;
+	lfo.origStepSize = lfo.stepSize;
 	lfo.setupFlags = flags;
 	lfo.stateHold1 = lfo.type == 2 ? duty : 0;
 	lfo.stateHold2 = lfo.type == 5 ? 1 : 0;
-	lfo.nextStep = (flags & 2) != 0 ? (std::rand() & 0x7ff) << 16 : startOffset << 16;
-	const EFFECTBANK* bank = static_cast<const EFFECTBANK*>(amb.bnk);
-	const int soundVolume = bank && amb.soundIndex >= 0 && amb.soundIndex < static_cast<int>(bank->sounds.size())
-		? bank->sounds[amb.soundIndex].volume : 127;
-	switch (lfo.target)
+	// A random LFO starts on a random held value (989snd.irx 0x184ac).
+	if (lfo.type == 5)
 	{
-	case 1: lfo.range = (soundVolume * lfo.depth) >> 10; break;
-	case 2: lfo.range = (180 * lfo.depth) >> 10; break;
-	case 3: lfo.range = (6096 * lfo.depth) >> 10; break;
-	case 4: lfo.range = (0x7fff * lfo.depth) >> 10; break;
-	default: lfo.range = 0; break;
+		const int magnitude = std::rand() & 0x7fff;
+		lfo.stateHold1 = -magnitude * (std::rand() & 1);
 	}
+	lfo.nextStep = (flags & 2) != 0 ? (std::rand() & 0x7ff) << 16 : startOffset << 16;
+	CalcEffectLfoRange(amb, lfo);
 	lfo.active = lfo.target != 0 && lfo.type != 0;
 	TickEffectLfos(amb);
 }

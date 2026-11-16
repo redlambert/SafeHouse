@@ -68,7 +68,9 @@ struct EFFECTLFO
     uint8_t targetExtra = 0;
     uint16_t setupFlags = 0;
     int16_t depth = 0;
+    uint16_t origDepth = 0;        // depth as set up; target 6 LFOs vary depth around it
     uint32_t stepSize = 0;
+    uint32_t origStepSize = 0;     // step size as set up; target 5 LFOs vary it
     int32_t nextStep = 0;
     int32_t stateHold1 = 0;
     int32_t stateHold2 = 0;
