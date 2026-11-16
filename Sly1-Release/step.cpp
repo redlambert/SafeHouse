@@ -325,9 +325,7 @@ void UpdateStepFootfall(STEP* pstep, float u, SFF* psff)
     }
 
     s_sfxidLast = isfxid;
-    pstep->tLastFootfall = g_clock.t;
 
-    TraceAudioDiag("footfall sfx=%d sneakyFeet=%d", isfxid, g_fSneakyFeet);
     StartSound(static_cast<SFXID>(isfxid), nullptr, nullptr, &pstep->xf.posWorld, 1000.0f, 200.0f,
                volume, 0.0f, 0.0f, nullptr, nullptr);
     NextSneakyFootstep();

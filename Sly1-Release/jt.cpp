@@ -3368,7 +3368,6 @@ void SetJtJts(JT* pjt, int jts, int jtbs)
 
                 if (pjt->pexcHide != nullptr)
                 {
-                    TraceAudioDiag("sly hide excitement off");
                     UnsetExcitement(pjt->pexcHide);
                     pjt->pexcHide = nullptr;
                 }
@@ -3647,10 +3646,7 @@ void SetJtJts(JT* pjt, int jts, int jtbs)
                 pjt->hfdk = -1;
 
                 if (fSetHideExcitement)
-                {
-                    TraceAudioDiag("sly hide excitement on");
                     pjt->pexcHide = PexcSetExcitement(-20);
-                }
                 break;
             }
 

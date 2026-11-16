@@ -179,7 +179,6 @@ void SetAlarmAlarms(ALARM* palarm, ALARMS alarms)
     if (alarmsPrev == ALARMS_Triggered) 
     {
         StopSound(palarm->pambSiren, 0);
-        TraceAudioDiag("alarm oid=%d untriggered", static_cast<int>(palarm->oid));
         UnsetExcitement(palarm->pexc);
         TriggerRsmg(palarm->psw, palarm->crsmg, palarm->arsmg, palarm, 0);
 
@@ -240,7 +239,6 @@ void SetAlarmAlarms(ALARM* palarm, ALARMS alarms)
         if (palarm->fSilent == 0)
             StartSound((SFXID)21, &palarm->pambSiren, palarm, nullptr, 8000.0f, 5000.0f, 1.0f, 0.0f, 0.0f, nullptr, nullptr);
 
-        TraceAudioDiag("alarm oid=%d triggered", static_cast<int>(palarm->oid));
         palarm->pexc = PexcSetExcitement(107);
         NotifyAlarmSensorsOnTrigger(palarm);
         TriggerRsmg(palarm->psw, palarm->crsmg, palarm->arsmg, palarm, 1);

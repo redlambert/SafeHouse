@@ -677,7 +677,6 @@ void OnStepguardRemove(STEPGUARD* pstepguard)
         pstepguard->pasegaPatrol = nullptr;
     }
     if (pstepguard->psgg != nullptr) {
-        TraceAudioDiag("guard removed oid=%d sgs=%d", static_cast<int>(pstepguard->oid), static_cast<int>(pstepguard->sgs));
         RemoveSggGuard(pstepguard->psgg, pstepguard);
     }
 
@@ -3538,10 +3537,6 @@ void SetSggSggs(SGG* psgg, SGGS sggs)
     // preserves the timers established when the state was first entered.
     if (sggsPrevious == sggs)
         return;
-
-    TraceAudioDiag("sgg %p state %d -> %d guards=%d firstOid=%d", static_cast<void*>(psgg),
-        static_cast<int>(sggsPrevious), static_cast<int>(sggs), psgg->cpstepguard,
-        psgg->cpstepguard > 0 && psgg->apstepguard[0] ? static_cast<int>(psgg->apstepguard[0]->oid) : -1);
 
     // Perform cleanup associated with leaving the current state.
     switch (sggsPrevious)

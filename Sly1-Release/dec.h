@@ -4253,8 +4253,6 @@ struct AMB;
 enum SFXID : int;
 enum REVERBK : int;
 void StartSound(SFXID sfxid, AMB** ppamb, ALO* palo, glm::vec3* ppos, float sStart, float sFull, float uVolAtSource, float frq, float uDoppler, LM* plmRepeat, LM* plmRepDist);
-// TEMPORARY DIAGNOSTIC: adds a line to MusicDiagnostics/music_dropout_trace.log.
-void TraceAudioDiag(const char* format, ...);
 void DropPamb(AMB** ppamb);
 void StopSound(AMB* pamb, int msRampdown);
 void SetAMRegister(int ireg, byte bVal);
