@@ -34,7 +34,7 @@ name: Build and release
 
 on:
   push:
-    branches: [main]
+    branches: [main, Upstream-Merge-Tests]
   pull_request:
   workflow_dispatch:
 
@@ -42,8 +42,9 @@ permissions:
   contents: read
 
 concurrency:
-  # One release at a time, in push order; pull requests cancel their own older runs.
-  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'main' }}
+  # One run at a time per branch, in push order (so test branch runs never queue behind or cancel a main release);
+  # pull requests cancel their own older runs.
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
